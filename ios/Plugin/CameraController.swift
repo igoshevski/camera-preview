@@ -31,9 +31,6 @@ class CameraController: NSObject {
     var sampleBufferCaptureCompletionBlock: ((UIImage?, Error?) -> Void)?
 
     var highResolutionOutput: Bool = false
-
-    var audioDevice: AVCaptureDevice?
-    var audioInput: AVCaptureDeviceInput?
 }
 
 extension CameraController {
@@ -62,7 +59,6 @@ extension CameraController {
                     camera.unlockForConfiguration()
                 }
             }
-            self.audioDevice = AVCaptureDevice.default(for: AVMediaType.audio)
         }
 
         func configureDeviceInputs() throws {
@@ -86,16 +82,6 @@ extension CameraController {
                     self.currentCameraPosition = .front
                 }
             } else { throw CameraControllerError.noCamerasAvailable }
-
-            // Add audio input
-            if let audioDevice = self.audioDevice {
-                self.audioInput = try AVCaptureDeviceInput(device: audioDevice)
-                if captureSession.canAddInput(self.audioInput!) {
-                    captureSession.addInput(self.audioInput!)
-                } else {
-                    throw CameraControllerError.inputsAreInvalid
-                }
-            }
         }
 
         func configurePhotoOutput() throws {
@@ -133,7 +119,6 @@ extension CameraController {
                 try configureDeviceInputs()
                 try configurePhotoOutput()
                 try configureDataOutput()
-                try configureVideoOutput()
             }
 
             catch {
@@ -389,31 +374,6 @@ extension CameraController {
         }
         
     }
-
-    func captureVideo(completion: @escaping (URL?, Error?) -> Void) {
-        guard let captureSession = self.captureSession, captureSession.isRunning else {
-            completion(nil, CameraControllerError.captureSessionIsMissing)
-            return
-        }
-        let path = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        let identifier = UUID()
-        let randomIdentifier = identifier.uuidString.replacingOccurrences(of: "-", with: "")
-        let finalIdentifier = String(randomIdentifier.prefix(8))
-        let fileName="cpcp_video_"+finalIdentifier+".mp4"
-
-            let fileUrl = path.appendingPathComponent(fileName)
-        try? FileManager.default.removeItem(at: fileUrl)
-        videoOutput!.startRecording(to: fileUrl, recordingDelegate: self)
-        self.videoRecordCompletionBlock = completion
-    }
-
-    func stopRecording(completion: @escaping (Error?) -> Void) {
-        guard let captureSession = self.captureSession, captureSession.isRunning else {
-            completion(CameraControllerError.captureSessionIsMissing)
-            return
-        }
-        self.videoOutput?.stopRecording()
-    }
 }
 
 extension CameraController: AVCapturePhotoCaptureDelegate {
@@ -574,15 +534,5 @@ extension UIImage {
         }
         guard let newCGImage = ctx.makeImage() else { return nil }
         return UIImage.init(cgImage: newCGImage, scale: 1, orientation: .up)
-    }
-}
-
-extension CameraController: AVCaptureFileOutputRecordingDelegate {
-    func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) {
-        if error == nil {
-            self.videoRecordCompletionBlock?(outputFileURL, nil)
-        } else {
-            self.videoRecordCompletionBlock?(nil, error)
-        }
     }
 }
